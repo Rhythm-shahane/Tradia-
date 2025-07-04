@@ -3,16 +3,20 @@ import streamlit as st
 import yfinance as yf
 import plotly.graph_objects as go
 from streamlit_autorefresh import st_autorefresh
+from news_fetcher import get_headlines
+from sentiment import analyze_sentiment, sentiment_score
 
-# --- Dummy News & Sentiment Functions (Replace with actual implementations if needed) ---
-def get_headlines(ticker):
-    return [f"{ticker} stock update example headline 1", f"{ticker} news article 2"]
-
-def analyze_sentiment(headlines):
-    return [{"label": "positive", "score": 0.7} for _ in headlines]
-
-def sentiment_score(results):
-    return sum(r["score"] if r["label"] == "positive" else -r["score"] for r in results) / len(results)
+def resolve_indian_ticker(base_symbol):
+    """Attempt to resolve Indian stock on NSE (.NS) or BSE (.BO)"""
+    for suffix in ['.NS', '.BO']:
+        full_ticker = base_symbol + suffix
+        try:
+            test_df = yf.Ticker(full_ticker).history(period="1d")
+            if not test_df.empty:
+                return full_ticker
+        except:
+            continue
+    return base_symbol  # fallback to original if nothing found
 
 # --- Page Config ---
 st.set_page_config(layout="wide")
@@ -31,20 +35,28 @@ if "positions" not in st.session_state:
     st.session_state.positions = []
 
 # --- Ticker Input ---
-input_ticker = st.text_input("Enter Stock Ticker (e.g., AAPL, RELIANCE.NS, TSLA):")
+input_ticker = st.text_input("Enter Stock Ticker (e.g., AAPL, RELIANCE, GLENMARK):")
 if input_ticker:
     cleaned = input_ticker.strip().replace("$", "").upper()
     aliases = {
         "APPLE": "AAPL", "GOOGLE": "GOOG", "TESLA": "TSLA",
-        "NVIDIA": "NVDA", "RELIANCE": "RELIANCE.NS", "RAYMOND": "RAYMOND.NS"
+        "NVIDIA": "NVDA", "RELIANCE": "RELIANCE", "RAYMOND": "RAYMOND"
     }
     cleaned = aliases.get(cleaned, cleaned)
+
+    # Resolve for Indian stocks if only base name is given
+    if cleaned.isalpha():
+        resolved = resolve_indian_ticker(cleaned)
+        if resolved != cleaned:
+            st.info(f"✅ Resolved to: `{resolved}`")
+        cleaned = resolved
+
     st.session_state["ticker"] = cleaned
     st.session_state["headlines"] = None
     st.session_state["sentiment"] = None
 
 ticker = st.session_state["ticker"]
-is_indian = ticker.endswith(".NS") or ticker.endswith(".BO")
+is_indian = ticker.endswith(".NS")
 
 # 🔁 Auto-refresh only chart every 5 seconds
 st_autorefresh(interval=5000, key="price_chart_refresh")
@@ -77,10 +89,10 @@ if st.session_state["headlines"]:
         if score > -0.5: return "🟠 Mild Negative"
         return "🔴 Strong Negative"
 
-    st.success(f"📊 Avg Sentiment Score: `{avg:.2f}`")
+    st.success(f"📊 Avg Sentiment Score: {avg:.2f}")
     st.info(f"🧾 Interpreted: **{interpret(avg)}**")
 
-# --- Price Chart + Simulation ---
+# --- Price Chart ---
 if ticker:
     st.subheader(f"📈 {ticker} Price Chart (Auto-refresh every 5s)")
 
@@ -131,7 +143,6 @@ if ticker:
             )
             st.plotly_chart(fig, use_container_width=True, key=f"{ticker}_{time_range}")
             st.caption(f"⏱️ Updated at {time.strftime('%H:%M:%S')}")
-
             # --- Trading Simulation Section ---
             st.subheader("🎯 Try Simulated Trading")
 
@@ -170,15 +181,20 @@ if ticker:
                     else:
                         st.error("Not enough shares to sell.")
 
+            # Display current wallet
             st.markdown(f"💼 **Simulated Wallet Balance:** ₹{st.session_state.balance:,.2f}")
 
+            # Display trade history
             if st.session_state.positions:
                 st.subheader("📒 Trade History with Decision Evaluation")
+
                 for i, t in enumerate(reversed(st.session_state.positions), 1):
                     qty = t["qty"]
                     price = t["price"]
                     action = t["type"]
                     time_ = t["time"]
+
+                    # Evaluate real-time P/L
                     pnl = (current - price) if action == "Buy" else (price - current)
                     status = (
                         "🟢 Good Decision" if pnl > 0.5 else
@@ -186,11 +202,32 @@ if ticker:
                         "🔴 Bad Decision"
                     )
                     direction = "↑" if pnl >= 0 else "↓"
+
+                    # Emoji and line
                     emoji = "🟢" if action == "Buy" else "🔴"
                     st.markdown(
                         f"{emoji} {action} {qty} @ ₹{price:.2f} — {time_}  \n"
                         f"      📊 Now: ₹{current:.2f} | P/L: ₹{pnl:.2f} {direction} → **{status}**"
                     )
+
+            # Evaluate decisions
+            if st.button("📋 Evaluate My Decision"):
+                profit = 0
+                qty_owned = 0
+                for trade in st.session_state.positions:
+                    if trade["type"] == "Buy":
+                        profit -= trade["qty"] * trade["price"]
+                        qty_owned += trade["qty"]
+                    elif trade["type"] == "Sell":
+                        profit += trade["qty"] * trade["price"]
+                        qty_owned -= trade["qty"]
+
+                profit += qty_owned * current
+                evaluation = "🟢 Good Decision" if profit > 0 else "🔴 Bad Decision" if profit < 0 else "⚪ Neutral"
+                st.metric("💡 Net P&L (Simulated)", f"₹{profit:.2f}")
+                st.info(f"📈 Decision Evaluation: **{evaluation}**")
+
+            # --- Buy/Sell Button ---
 
     except Exception as e:
         st.error(f"❌ Error loading chart: {e}")
