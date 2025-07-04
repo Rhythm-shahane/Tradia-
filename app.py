@@ -6,18 +6,6 @@ from streamlit_autorefresh import st_autorefresh
 from news_fetcher import get_headlines
 from sentiment import analyze_sentiment, sentiment_score
 
-def resolve_indian_ticker(base_symbol):
-    """Attempt to resolve Indian stock on NSE (.NS) or BSE (.BO)"""
-    for suffix in ['.NS', '.BO']:
-        full_ticker = base_symbol + suffix
-        try:
-            test_df = yf.Ticker(full_ticker).history(period="1d")
-            if not test_df.empty:
-                return full_ticker
-        except:
-            continue
-    return base_symbol  # fallback to original if nothing found
-
 # --- Page Config ---
 st.set_page_config(layout="wide")
 st.title("📈 Global Real-Time Stock Dashboard")
@@ -33,6 +21,18 @@ if "balance" not in st.session_state:
     st.session_state.balance = 100000.0  # ₹1L
 if "positions" not in st.session_state:
     st.session_state.positions = []
+
+def resolve_indian_ticker(base_symbol):
+    """Attempt to resolve Indian stock on NSE (.NS) or BSE (.BO)"""
+    for suffix in ['.NS', '.BO']:
+        full_ticker = base_symbol + suffix
+        try:
+            test_df = yf.Ticker(full_ticker).history(period="1d")
+            if not test_df.empty:
+                return full_ticker
+        except:
+            continue
+    return base_symbol  # fallback to original if nothing found
 
 # --- Ticker Input ---
 input_ticker = st.text_input("Enter Stock Ticker (e.g., AAPL, RELIANCE, GLENMARK):")
@@ -63,7 +63,8 @@ st_autorefresh(interval=5000, key="price_chart_refresh")
 
 # --- News + Sentiment ---
 if ticker and st.session_state["headlines"] is None:
-    headlines = get_headlines(ticker)
+    symbol_for_news = ticker.replace(".NS", "").replace(".BO", "")
+    headlines = get_headlines(symbol_for_news)
     if headlines:
         st.session_state["headlines"] = headlines
         st.session_state["sentiment"] = analyze_sentiment(headlines)
