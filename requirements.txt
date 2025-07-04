@@ -1,7 +1,15 @@
 streamlit
 streamlit-autorefresh
 yfinance
+plotly
 pandas
 numpy
-plotly
 requests
+newsapi-python
+transformers
+scikit-learn
+matplotlib
+beautifulsoup4
+lxml
+tqdm
+nltk
