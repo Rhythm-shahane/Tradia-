@@ -229,6 +229,54 @@ if ticker:
                 st.info(f"📈 Decision Evaluation: **{evaluation}**")
 
             # --- Buy/Sell Button ---
+            # -------------------------------
+            # 📊 Multi-Stock Comparison Block
+            # -------------------------------
+
+            st.header("📊 Compare Multiple Stocks")
+            multi_tickers = st.multiselect(
+                "Select stocks to compare (NSE or Global):",
+                options=["RELIANCE.NS", "TCS.NS", "INFY.NS", "AAPL", "TSLA", "GOOG", "NIFTYBEES.NS"],
+                default=["RELIANCE.NS", "TCS.NS"]
+            )
+
+            if multi_tickers:
+                period = "5d"
+                interval = "1h"
+                fig = go.Figure()
+
+                for tick in multi_tickers:
+                    try:
+                        data = yf.Ticker(tick).history(period=period, interval=interval)
+                        if not data.empty:
+                            fig.add_trace(go.Scatter(
+                                x=data.index,
+                                y=data["Close"],
+                                mode="lines",
+                                name=tick
+                            ))
+                    except Exception as e:
+                        st.warning(f"⚠️ Failed to load {tick}: {e}")
+
+                fig.update_layout(
+                    title="Multi-Stock Price Comparison (5D, 1H)",
+                    xaxis_title="Time",
+                    yaxis_title="Price",
+                    height=500,
+                    template="plotly_dark"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+                if st.checkbox("Show Sentiment for Selected Stocks"):
+                    for tick in multi_tickers:
+                        base = tick.replace(".NS", "").replace(".BO", "")
+                        headlines = get_headlines(base)
+                        if headlines:
+                            sentiment = analyze_sentiment(headlines)
+                            avg = sentiment_score(sentiment)
+                            st.markdown(f"📰 **{tick} → Sentiment Score: `{avg:.2f}`**")
+                        else:
+                            st.markdown(f"📰 **{tick} → No news found**")
 
     except Exception as e:
         st.error(f"❌ Error loading chart: {e}")
