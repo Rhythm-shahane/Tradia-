@@ -6,9 +6,39 @@ from streamlit_autorefresh import st_autorefresh
 from news_fetcher import get_headlines
 from sentiment import analyze_sentiment, sentiment_score
 
+import streamlit as st
+
 # --- Page Config ---
 st.set_page_config(layout="wide")
 st.title("📈 Global Real-Time Stock Dashboard")
+
+# --- Authentication Setup ---
+USERS = {
+    "devansh": "1234",
+    "admin": "adminpass"
+}
+
+# --- Login Logic ---
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+
+if not st.session_state["authenticated"]:
+    st.subheader("🔐 Login to Continue")
+
+    with st.form("login_form"):
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        login_button = st.form_submit_button("Login")
+
+        if login_button:
+            if USERS.get(username) == password:
+                st.session_state["authenticated"] = True
+                st.rerun()  # Instantly move to dashboard
+            else:
+                st.error("❌ Invalid credentials.")
+
+    st.stop()
+
 
 # --- Session Initialization ---
 if "ticker" not in st.session_state:
